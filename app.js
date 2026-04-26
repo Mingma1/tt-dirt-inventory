@@ -187,12 +187,16 @@ async function loadSheetData() {
 }
 
 async function addItemToSheet(rowData) {
+  // Optimistic UI Update: add to state immediately
+  state.inventoryData.unshift(rowData);
+  recalculateAll();
+  renderAll();
+  showToast('Item added successfully!', 'success');
+
   try {
+    // Fire background request
     const json = await appsScriptPost(CONFIG.WEB_APP_URL, { action: 'add', row: rowData });
     if (json.error) throw new Error(json.error);
-
-    await loadSheetData();
-    showToast('Item added successfully!', 'success');
     return true;
   } catch (e) {
     showToast('Failed to add item: ' + e.message, 'error');
@@ -202,12 +206,16 @@ async function addItemToSheet(rowData) {
 
 async function updateItemInSheet(rowIndex, rowData) {
   const sheetRow = rowIndex + 2; // +1 for header, +1 for 1-index
+  
+  // Optimistic update
+  state.inventoryData[rowIndex] = rowData;
+  recalculateAll();
+  renderAll();
+  showToast('Item updated successfully!', 'success');
+
   try {
     const json = await appsScriptPost(CONFIG.WEB_APP_URL, { action: 'update', rowIndex: sheetRow, row: rowData });
     if (json.error) throw new Error(json.error);
-
-    await loadSheetData();
-    showToast('Item updated successfully!', 'success');
     return true;
   } catch (e) {
     showToast('Failed to update item: ' + e.message, 'error');
@@ -217,6 +225,13 @@ async function updateItemInSheet(rowIndex, rowData) {
 
 async function sellItemInSheet(rowIndex, updatedRow, soldItemData) {
   const sheetRow = rowIndex + 2; // +1 for header, +1 for 1-index
+  
+  // Optimistic update
+  state.inventoryData[rowIndex] = updatedRow;
+  recalculateAll();
+  renderAll();
+  showToast('Item sold and recorded in History!', 'success');
+
   try {
     const response = await appsScriptPost(CONFIG.WEB_APP_URL, { 
       action: 'sell', 
@@ -224,9 +239,6 @@ async function sellItemInSheet(rowIndex, updatedRow, soldItemData) {
       row: updatedRow,
       soldItem: soldItemData
     });
-
-    await loadSheetData();
-    showToast('Item sold and recorded in History!', 'success');
     return true;
   } catch (e) {
     showToast('Failed to record sale: ' + e.message, 'error');
@@ -236,12 +248,16 @@ async function sellItemInSheet(rowIndex, updatedRow, soldItemData) {
 
 async function deleteItemFromSheet(rowIndex) {
   const sheetRow = rowIndex + 2; // +1 for header, +1 for 1-index
+  
+  // Optimistic update
+  state.inventoryData.splice(rowIndex, 1);
+  recalculateAll();
+  renderAll();
+  showToast('Item deleted successfully!', 'success');
+
   try {
     const json = await appsScriptPost(CONFIG.WEB_APP_URL, { action: 'delete', rowIndex: sheetRow });
     if (json.error) throw new Error(json.error);
-
-    await loadSheetData();
-    showToast('Item deleted successfully!', 'success');
   } catch (e) {
     showToast('Failed to delete item: ' + e.message, 'error');
   }

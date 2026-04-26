@@ -82,7 +82,7 @@ function doPost(e) {
       range.setValues([payload.row]);
       
       // Add the record to the history sheet
-      var timestamp = new Date().toLocaleString();
+      var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
       var partId = payload.soldItem.partId;
       var itemName = payload.soldItem.itemName;
       var qty = 1; // Selling 1 at a time for now
