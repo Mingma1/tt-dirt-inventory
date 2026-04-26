@@ -25,25 +25,30 @@ function setupHistorySheet() {
 
 function doGet(e) {
   var action = e.parameter.action;
+  var callback = e.parameter.callback;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
+  var responseData;
   if (action === 'getHistory') {
     var historySheet = ss.getSheetByName("Sales History");
     if (!historySheet) {
-      // If no history sheet exists yet, return empty data
-      return ContentService.createTextOutput(JSON.stringify([]))
-        .setMimeType(ContentService.MimeType.JSON);
+      responseData = [];
+    } else {
+      responseData = historySheet.getDataRange().getDisplayValues();
     }
-    
-    var data = historySheet.getDataRange().getDisplayValues();
-    return ContentService.createTextOutput(JSON.stringify(data))
-      .setMimeType(ContentService.MimeType.JSON);
   } 
   else {
     // Default GET returns inventory
     var sheet = ss.getSheets()[0];
-    var data = sheet.getDataRange().getDisplayValues();
-    return ContentService.createTextOutput(JSON.stringify(data))
+    responseData = sheet.getDataRange().getDisplayValues();
+  }
+
+  // Handle JSONP fallback for CORS-blocked browsers
+  if (callback) {
+    return ContentService.createTextOutput(callback + '(' + JSON.stringify(responseData) + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  } else {
+    return ContentService.createTextOutput(JSON.stringify(responseData))
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
