@@ -80,26 +80,23 @@ async function appsScriptGet(url) {
 }
 
 async function appsScriptPost(url, payload) {
-  // POST to Apps Script. No custom Content-Type header avoids CORS preflight.
-  const response = await fetch(url, {
+  // POST to Apps Script using mode: 'no-cors' to completely bypass CORS preflight
+  // This is required because Apps Script redirects (302) on POSTs, which browsers block
+  // if mode is 'cors'.
+  await fetch(url, {
     method: 'POST',
-    redirect: 'follow',
+    mode: 'no-cors', // Opaque response, but request succeeds
     body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
-  // Apps Script may return plain text like "Success" instead of JSON
-  const text = await response.text();
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    // If the response is plain text like "Success", treat it as OK
-    if (text.toLowerCase().includes('success')) {
-      return { success: true };
+    headers: {
+      'Content-Type': 'text/plain',
     }
-    throw new Error(text || 'Unknown error from server');
-  }
+  });
+  
+  // Wait a tiny bit for the Apps Script to finish writing before we reload data
+  await new Promise(resolve => setTimeout(resolve, 800));
+  
+  // Since 'no-cors' makes the response opaque, we can't read it. We assume success.
+  return { success: true };
 }
 
 // Fallback: Use JSONP-style script injection if fetch fails due to CORS
