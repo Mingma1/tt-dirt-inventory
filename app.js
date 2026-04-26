@@ -339,6 +339,7 @@ function renderInventoryTable() {
         <td class="cell-readonly ${profitClass}">${formatCurrency(unitProfit)}</td>
         <td>
           <div class="cell-actions">
+            <button class="btn-icon-sm sell" onclick="sellItem(${originalIndex})" title="Sell 1 (-1 Stock)">🛒</button>
             <button class="btn-icon-sm" onclick="openEditModal(${originalIndex})" title="Edit">✏️</button>
             <button class="btn-icon-sm delete" onclick="confirmDelete(${originalIndex})" title="Delete">🗑️</button>
           </div>
@@ -537,6 +538,32 @@ function confirmDelete(index) {
   if (confirm(`Delete "${name}"? This cannot be undone.`)) {
     deleteItemFromSheet(index);
   }
+}
+
+async function sellItem(index) {
+  const row = state.inventoryData[index];
+  const currentStock = parseInt(row[CONFIG.COL.STOCK_LEVEL]) || 0;
+  
+  if (currentStock <= 0) {
+    showToast('Out of stock!', 'error');
+    return;
+  }
+  
+  // Create a copy of the row and decrease stock by 1
+  const updatedRow = [...row];
+  updatedRow[CONFIG.COL.STOCK_LEVEL] = (currentStock - 1).toString();
+  
+  // Recalculate computed values
+  const cost = parseFloat(updatedRow[CONFIG.COL.COST_PRICE]) || 0;
+  const sale = parseFloat(updatedRow[CONFIG.COL.SALE_PRICE]) || 0;
+  updatedRow[CONFIG.COL.TOTAL_COST_VALUE] = ((currentStock - 1) * cost).toFixed(2);
+  updatedRow[CONFIG.COL.UNIT_PROFIT] = (sale - cost).toFixed(2);
+  
+  const name = updatedRow[CONFIG.COL.PART_NAME] || updatedRow[CONFIG.COL.PART_ID];
+  showToast(`Selling 1x ${name}...`, 'info');
+  
+  // Send the update to the server
+  await updateItemInSheet(index, updatedRow);
 }
 
 // ── Search ──
