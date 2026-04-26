@@ -117,6 +117,15 @@ body::before {
   gap: 12px;
 }
 
+.app-logo-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-glass);
+}
+
 .app-logo-icon {
   width: 42px;
   height: 42px;

@@ -80,7 +80,7 @@ async function appsScriptGet(url) {
 }
 
 async function appsScriptPost(url, payload) {
-  // POST to Apps Script. Using 'text/plain' content type avoids CORS preflight.
+  // POST to Apps Script. No custom Content-Type header avoids CORS preflight.
   const response = await fetch(url, {
     method: 'POST',
     redirect: 'follow',
@@ -89,7 +89,17 @@ async function appsScriptPost(url, payload) {
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
-  return response.json();
+  // Apps Script may return plain text like "Success" instead of JSON
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    // If the response is plain text like "Success", treat it as OK
+    if (text.toLowerCase().includes('success')) {
+      return { success: true };
+    }
+    throw new Error(text || 'Unknown error from server');
+  }
 }
 
 // Fallback: Use JSONP-style script injection if fetch fails due to CORS
