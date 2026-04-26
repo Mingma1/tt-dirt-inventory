@@ -62,6 +62,9 @@
       <button class="btn btn-add" id="btn-add">
         <span class="btn-icon">➕</span> Add Item
       </button>
+      <button class="btn btn-history" id="btn-history">
+        <span class="btn-icon">📜</span> History
+      </button>
       <button class="btn btn-refresh" id="btn-refresh" title="Refresh data">
         🔄
       </button>
@@ -177,6 +180,37 @@
 
         <button class="btn-submit" type="submit" id="btn-form-submit">Add Item</button>
       </form>
+    </div>
+  </div>
+
+  <!-- ═══ History Modal ═══ -->
+  <div class="modal-overlay" id="history-modal-overlay">
+    <div class="modal history-modal">
+      <div class="modal-title">
+        <span id="history-modal-title-text">📜 Sales History</span>
+        <button class="btn-close-modal" id="btn-close-history">✕</button>
+      </div>
+      <div class="table-wrapper history-table-wrapper">
+        <table class="inventory-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Part ID</th>
+              <th>Item Name</th>
+              <th>Qty</th>
+              <th>Profit</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody">
+            <tr><td colspan="5">
+              <div class="empty-state">
+                <div class="icon">⏳</div>
+                <p>Loading history...</p>
+              </div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 

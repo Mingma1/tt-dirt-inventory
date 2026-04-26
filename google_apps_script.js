@@ -1,6 +1,4 @@
 /**
- * COPY THIS ENTIRE FILE AND PASTE IT INTO GOOGLE APPS SCRIPT
- * 
  * 1. Go to your Google Sheet > Extensions > Apps Script
  * 2. Paste this code, replacing whatever is there.
  * 3. Click "Deploy" > "Manage Deployments"
@@ -9,24 +7,58 @@
  * 6. Click "Deploy"
  */
 
+function setupHistorySheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var historySheet = ss.getSheetByName("Sales History");
+  
+  if (!historySheet) {
+    historySheet = ss.insertSheet("Sales History");
+    historySheet.appendRow(["Timestamp", "Part ID", "Item Name", "Quantity Sold", "Cost Price", "Sale Price", "Total Profit"]);
+    // Make headers bold
+    historySheet.getRange("A1:G1").setFontWeight("bold");
+    // Freeze top row
+    historySheet.setFrozenRows(1);
+  }
+  
+  return historySheet;
+}
+
 function doGet(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
-  var data = sheet.getDataRange().getDisplayValues();
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+  var action = e.parameter.action;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  if (action === 'getHistory') {
+    var historySheet = ss.getSheetByName("Sales History");
+    if (!historySheet) {
+      // If no history sheet exists yet, return empty data
+      return ContentService.createTextOutput(JSON.stringify([]))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var data = historySheet.getDataRange().getDisplayValues();
+    return ContentService.createTextOutput(JSON.stringify(data))
+      .setMimeType(ContentService.MimeType.JSON);
+  } 
+  else {
+    // Default GET returns inventory
+    var sheet = ss.getSheets()[0];
+    var data = sheet.getDataRange().getDisplayValues();
+    return ContentService.createTextOutput(JSON.stringify(data))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function doPost(e) {
-  // If we receive a POST without content, error out
   if (!e.postData || !e.postData.contents) {
     return ContentService.createTextOutput("Error: No data received")
       .setMimeType(ContentService.MimeType.TEXT_PLAIN);
   }
 
   try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheets()[0]; // Main inventory sheet
+    var historySheet = setupHistorySheet(); // Ensures history tab exists
     
-    // Parse the JSON payload coming from app.js
     var payload = JSON.parse(e.postData.contents);
     
     // ACTION: ADD
@@ -35,21 +67,31 @@ function doPost(e) {
     } 
     // ACTION: UPDATE
     else if (payload.action === 'update') {
-      // rowIndex from app.js is exactly matching the physical spreadsheet row
-      // payload.row contains the updated array
       var range = sheet.getRange(payload.rowIndex, 1, 1, payload.row.length);
       range.setValues([payload.row]);
+    }
+    // ACTION: SELL
+    else if (payload.action === 'sell') {
+      // Update the main sheet stock count
+      var range = sheet.getRange(payload.rowIndex, 1, 1, payload.row.length);
+      range.setValues([payload.row]);
+      
+      // Add the record to the history sheet
+      var timestamp = new Date().toLocaleString();
+      var partId = payload.soldItem.partId;
+      var itemName = payload.soldItem.itemName;
+      var qty = 1; // Selling 1 at a time for now
+      var cost = payload.soldItem.cost;
+      var sale = payload.soldItem.sale;
+      var profit = (sale - cost).toFixed(2);
+      
+      historySheet.appendRow([timestamp, partId, itemName, qty, cost, sale, profit]);
     }
     // ACTION: DELETE
     else if (payload.action === 'delete') {
       sheet.deleteRow(payload.rowIndex);
     }
-    else {
-      return ContentService.createTextOutput("Error: Unknown action " + payload.action)
-        .setMimeType(ContentService.MimeType.TEXT_PLAIN);
-    }
     
-    // Must return text so fetch API doesn't throw parsing errors on no-cors
     return ContentService.createTextOutput("Success")
       .setMimeType(ContentService.MimeType.TEXT_PLAIN);
       

@@ -215,6 +215,25 @@ async function updateItemInSheet(rowIndex, rowData) {
   }
 }
 
+async function sellItemInSheet(rowIndex, updatedRow, soldItemData) {
+  const sheetRow = rowIndex + 2; // +1 for header, +1 for 1-index
+  try {
+    const response = await appsScriptPost(CONFIG.WEB_APP_URL, { 
+      action: 'sell', 
+      rowIndex: sheetRow, 
+      row: updatedRow,
+      soldItem: soldItemData
+    });
+
+    await loadSheetData();
+    showToast('Item sold and recorded in History!', 'success');
+    return true;
+  } catch (e) {
+    showToast('Failed to record sale: ' + e.message, 'error');
+    return false;
+  }
+}
+
 async function deleteItemFromSheet(rowIndex) {
   const sheetRow = rowIndex + 2; // +1 for header, +1 for 1-index
   try {
@@ -562,8 +581,78 @@ async function sellItem(index) {
   const name = updatedRow[CONFIG.COL.PART_NAME] || updatedRow[CONFIG.COL.PART_ID];
   showToast(`Selling 1x ${name}...`, 'info');
   
-  // Send the update to the server
-  await updateItemInSheet(index, updatedRow);
+  // Send the update to the server with sell action
+  await sellItemInSheet(index, updatedRow, {
+    partId: row[CONFIG.COL.PART_ID] || '',
+    itemName: name,
+    cost: cost,
+    sale: sale
+  });
+}
+
+// ── Sales History ──
+async function loadSalesHistory() {
+  const tbody = document.getElementById('history-tbody');
+  tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">⏳</div><p>Loading history...</p></div></td></tr>`;
+  
+  try {
+    const url = `${CONFIG.WEB_APP_URL}?action=getHistory`;
+    const response = await fetch(url, { method: 'GET', redirect: 'follow' });
+    if (!response.ok) throw new Error('Fetch failed');
+    
+    const json = await response.json();
+    let historyRows = [];
+    if (json.data && Array.isArray(json.data)) historyRows = json.data;
+    else if (Array.isArray(json)) historyRows = json;
+    
+    // Skip headers if present
+    if (historyRows.length > 0 && String(historyRows[0][0]).toLowerCase().includes('time')) {
+      historyRows = historyRows.slice(1);
+    }
+    
+    // Sort reverse chronological
+    historyRows.reverse();
+    renderSalesHistory(historyRows);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">⚠️</div><p>Failed to load: ${e.message}</p></div></td></tr>`;
+  }
+}
+
+function renderSalesHistory(rows) {
+  const tbody = document.getElementById('history-tbody');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">📜</div><p>No sales history yet.</p></div></td></tr>`;
+    return;
+  }
+  
+  tbody.innerHTML = rows.map(row => {
+    // Expected: [Timestamp, Part ID, Item Name, Quantity Sold, Cost Price, Sale Price, Total Profit]
+    const timestamp = row[0] || '';
+    const partId = row[1] || '';
+    const itemName = row[2] || '';
+    const qty = row[3] || '1';
+    const profit = parseFloat(row[6]) || 0;
+    const profitClass = profit >= 0 ? 'cell-profit-positive' : 'cell-profit-negative';
+    
+    return `
+      <tr>
+        <td style="font-size: 0.72rem; color: var(--text-muted);">${escapeHtml(timestamp)}</td>
+        <td class="cell-id">${escapeHtml(partId)}</td>
+        <td>${escapeHtml(itemName)}</td>
+        <td>${escapeHtml(qty)}</td>
+        <td class="${profitClass}">${formatCurrency(profit)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function openHistoryModal() {
+  document.getElementById('history-modal-overlay').classList.add('active');
+  loadSalesHistory();
+}
+
+function closeHistoryModal() {
+  document.getElementById('history-modal-overlay').classList.remove('active');
 }
 
 // ── Search ──
@@ -632,6 +721,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('modal-overlay').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeModal();
   });
+  document.getElementById('history-modal-overlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeHistoryModal();
+  });
+
+  // History Actions
+  document.getElementById('btn-history').addEventListener('click', openHistoryModal);
+  document.getElementById('btn-close-history').addEventListener('click', closeHistoryModal);
 
   // Close scanner on overlay click outside scanner
   document.getElementById('scanner-overlay').addEventListener('click', (e) => {

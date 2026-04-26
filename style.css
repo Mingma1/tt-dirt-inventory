@@ -291,6 +291,19 @@ body::before {
 }
 .btn-add:active { transform: translateY(0); }
 
+.btn-history {
+  flex: 1;
+  justify-content: center;
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+  color: white;
+  box-shadow: 0 4px 14px rgba(139,92,246,0.3);
+}
+.btn-history:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(139,92,246,0.4);
+}
+.btn-history:active { transform: translateY(0); }
+
 .btn-refresh {
   padding: 12px 14px;
   background: var(--bg-glass);
@@ -460,6 +473,10 @@ body::before {
 .table-wrapper {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+.history-table-wrapper {
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .inventory-table {
