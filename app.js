@@ -34,23 +34,17 @@ function recalculateAll() {
   state.inventoryData.forEach(row => {
     const stock = parseFloat(row[CONFIG.COL.STOCK_LEVEL]) || 0;
     const cost = parseFloat(row[CONFIG.COL.COST_PRICE]) || 0;
-    const sale = parseFloat(row[CONFIG.COL.SALE_PRICE]) || 0;
     row[CONFIG.COL.TOTAL_COST_VALUE] = (stock * cost).toFixed(2);
-    row[CONFIG.COL.UNIT_PROFIT] = (sale - cost).toFixed(2);
   });
 }
 
 function getFinanceSummary() {
   let totalInvestment = 0;
-  let totalPotentialProfit = 0;
   state.inventoryData.forEach(row => {
-    const stock = parseFloat(row[CONFIG.COL.STOCK_LEVEL]) || 0;
     const totalCost = parseFloat(row[CONFIG.COL.TOTAL_COST_VALUE]) || 0;
-    const unitProfit = parseFloat(row[CONFIG.COL.UNIT_PROFIT]) || 0;
     totalInvestment += totalCost;
-    totalPotentialProfit += stock * unitProfit;
   });
-  return { totalInvestment, totalPotentialProfit };
+  return { totalInvestment };
 }
 
 function getLowStockItems() {
@@ -204,6 +198,23 @@ async function addItemToSheet(rowData) {
   }
 }
 
+async function adjustStock(index, delta) {
+  const row = state.inventoryData[index];
+  if (!row) return;
+
+  const currentStock = parseInt(row[CONFIG.COL.STOCK_LEVEL]) || 0;
+  let newStock = currentStock + delta;
+  
+  if (newStock < 0) {
+    showToast('Stock cannot go below 0', 'error');
+    return;
+  }
+
+  const updatedRow = [...row];
+  updatedRow[CONFIG.COL.STOCK_LEVEL] = newStock.toString();
+  await updateItemInSheet(index, updatedRow);
+}
+
 async function updateItemInSheet(rowIndex, rowData) {
   const sheetRow = rowIndex + 2; // +1 for header, +1 for 1-index
   
@@ -219,29 +230,6 @@ async function updateItemInSheet(rowIndex, rowData) {
     return true;
   } catch (e) {
     showToast('Failed to update item: ' + e.message, 'error');
-    return false;
-  }
-}
-
-async function sellItemInSheet(rowIndex, updatedRow, soldItemData) {
-  const sheetRow = rowIndex + 2; // +1 for header, +1 for 1-index
-  
-  // Optimistic update
-  state.inventoryData[rowIndex] = updatedRow;
-  recalculateAll();
-  renderAll();
-  showToast('Item sold and recorded in History!', 'success');
-
-  try {
-    const response = await appsScriptPost(CONFIG.WEB_APP_URL, { 
-      action: 'sell', 
-      rowIndex: sheetRow, 
-      row: updatedRow,
-      soldItem: soldItemData
-    });
-    return true;
-  } catch (e) {
-    showToast('Failed to record sale: ' + e.message, 'error');
     return false;
   }
 }
@@ -286,17 +274,9 @@ function renderAll() {
 }
 
 function renderFinanceSummary() {
-  const { totalInvestment, totalPotentialProfit } = getFinanceSummary();
+  const { totalInvestment } = getFinanceSummary();
   document.getElementById('total-investment').textContent = formatCurrency(totalInvestment);
-  document.getElementById('total-profit').textContent = formatCurrency(totalPotentialProfit);
   document.getElementById('total-items').textContent = `${state.inventoryData.length} items tracked`;
-  
-  const totalRevenue = state.inventoryData.reduce((sum, row) => {
-    const stock = parseFloat(row[CONFIG.COL.STOCK_LEVEL]) || 0;
-    const sale = parseFloat(row[CONFIG.COL.SALE_PRICE]) || 0;
-    return sum + (stock * sale);
-  }, 0);
-  document.getElementById('potential-revenue').textContent = `Est. revenue: ${formatCurrency(totalRevenue)}`;
 }
 
 function renderLowStock() {
@@ -344,7 +324,7 @@ function renderInventoryTable() {
 
   if (data.length === 0) {
     tbody.innerHTML = `
-      <tr><td colspan="8">
+      <tr><td colspan="6">
         <div class="empty-state">
           <div class="icon">📦</div>
           <p>${query ? 'No items match your search' : 'No inventory data yet. Add your first item!'}</p>
@@ -356,8 +336,6 @@ function renderInventoryTable() {
 
   tbody.innerHTML = data.map(({ row, originalIndex }) => {
     const stock = parseInt(row[CONFIG.COL.STOCK_LEVEL]) || 0;
-    const unitProfit = parseFloat(row[CONFIG.COL.UNIT_PROFIT]) || 0;
-    const profitClass = unitProfit >= 0 ? 'cell-profit-positive' : 'cell-profit-negative';
 
     let stockBadge = '';
     if (stock === 0) stockBadge = '<span class="stock-badge critical">OUT</span>';
@@ -367,14 +345,18 @@ function renderInventoryTable() {
       <tr id="row-${originalIndex}" data-index="${originalIndex}">
         <td class="cell-id">${escapeHtml(row[CONFIG.COL.PART_ID] || '')}</td>
         <td>${escapeHtml(row[CONFIG.COL.PART_NAME] || '')}</td>
-        <td>${stock} ${stockBadge}</td>
+        <td>
+          <div class="stock-control">
+            <button class="btn-stock-adjust" onclick="adjustStock(${originalIndex}, -1)" title="Decrease Stock">－</button>
+            <span>${stock}</span>
+            <button class="btn-stock-adjust" onclick="adjustStock(${originalIndex}, 1)" title="Increase Stock">＋</button>
+            ${stockBadge}
+          </div>
+        </td>
         <td>${formatCurrency(parseFloat(row[CONFIG.COL.COST_PRICE]) || 0)}</td>
-        <td>${formatCurrency(parseFloat(row[CONFIG.COL.SALE_PRICE]) || 0)}</td>
         <td class="cell-readonly">${formatCurrency(parseFloat(row[CONFIG.COL.TOTAL_COST_VALUE]) || 0)}</td>
-        <td class="cell-readonly ${profitClass}">${formatCurrency(unitProfit)}</td>
         <td>
           <div class="cell-actions">
-            <button class="btn-icon-sm sell" onclick="sellItem(${originalIndex})" title="Sell 1 (-1 Stock)">🛒</button>
             <button class="btn-icon-sm" onclick="openEditModal(${originalIndex})" title="Edit">✏️</button>
             <button class="btn-icon-sm delete" onclick="confirmDelete(${originalIndex})" title="Delete">🗑️</button>
           </div>
@@ -390,7 +372,7 @@ function setLoading(loading) {
   if (loading) {
     tbody.innerHTML = Array(5).fill('').map(() => `
       <tr class="skeleton-row">
-        ${Array(8).fill('').map(() => '<td><div class="skeleton skeleton-cell">&nbsp;</div></td>').join('')}
+        ${Array(6).fill('').map(() => '<td><div class="skeleton skeleton-cell">&nbsp;</div></td>').join('')}
       </tr>
     `).join('');
   }
@@ -473,7 +455,6 @@ function openAddModal(prefillId = '') {
   document.getElementById('form-part-name').value = '';
   document.getElementById('form-stock').value = '';
   document.getElementById('form-cost').value = '';
-  document.getElementById('form-sale').value = '';
   updateComputedPreview();
   document.getElementById('modal-overlay').classList.add('active');
   if (!prefillId) document.getElementById('form-part-id').focus();
@@ -489,7 +470,6 @@ function openEditModal(index) {
   document.getElementById('form-part-name').value = row[CONFIG.COL.PART_NAME] || '';
   document.getElementById('form-stock').value = row[CONFIG.COL.STOCK_LEVEL] || '';
   document.getElementById('form-cost').value = row[CONFIG.COL.COST_PRICE] || '';
-  document.getElementById('form-sale').value = row[CONFIG.COL.SALE_PRICE] || '';
   updateComputedPreview();
   document.getElementById('modal-overlay').classList.add('active');
 }
@@ -502,40 +482,38 @@ function closeModal() {
 function updateComputedPreview() {
   const stock = parseFloat(document.getElementById('form-stock').value) || 0;
   const cost = parseFloat(document.getElementById('form-cost').value) || 0;
-  const sale = parseFloat(document.getElementById('form-sale').value) || 0;
   const totalCost = stock * cost;
-  const unitProfit = sale - cost;
   document.getElementById('preview-total-cost').textContent = formatCurrency(totalCost);
-  document.getElementById('preview-unit-profit').textContent = formatCurrency(unitProfit);
-  document.getElementById('preview-unit-profit').className =
-    'form-computed-value ' + (unitProfit >= 0 ? 'profit' : '');
 }
 
 async function handleFormSubmit(e) {
   e.preventDefault();
-  const partId = document.getElementById('form-part-id').value.trim();
+  let partId = document.getElementById('form-part-id').value.trim();
   const partName = document.getElementById('form-part-name').value.trim();
   const stock = document.getElementById('form-stock').value.trim();
   const cost = document.getElementById('form-cost').value.trim();
-  const sale = document.getElementById('form-sale').value.trim();
 
-  if (!partId || !partName || !stock || !cost || !sale) {
-    showToast('Please fill in all fields', 'error');
+  if (!partName || !stock || !cost) {
+    showToast('Please fill in Name, Stock, and Cost fields', 'error');
     return;
+  }
+
+  // Auto-generate Part ID if left blank
+  if (!partId) {
+    partId = 'ITM-' + Math.floor(1000 + Math.random() * 9000);
   }
 
   const stockNum = parseFloat(stock);
   const costNum = parseFloat(cost);
-  const saleNum = parseFloat(sale);
 
   const rowData = [
     partId,
     partName,
     stockNum.toString(),
     costNum.toFixed(2),
-    saleNum.toFixed(2),
+    "",
     (stockNum * costNum).toFixed(2),
-    (saleNum - costNum).toFixed(2),
+    "",
   ];
 
   const submitBtn = document.getElementById('btn-form-submit');
@@ -575,102 +553,6 @@ function confirmDelete(index) {
   }
 }
 
-async function sellItem(index) {
-  const row = state.inventoryData[index];
-  const currentStock = parseInt(row[CONFIG.COL.STOCK_LEVEL]) || 0;
-  
-  if (currentStock <= 0) {
-    showToast('Out of stock!', 'error');
-    return;
-  }
-  
-  // Create a copy of the row and decrease stock by 1
-  const updatedRow = [...row];
-  updatedRow[CONFIG.COL.STOCK_LEVEL] = (currentStock - 1).toString();
-  
-  // Recalculate computed values
-  const cost = parseFloat(updatedRow[CONFIG.COL.COST_PRICE]) || 0;
-  const sale = parseFloat(updatedRow[CONFIG.COL.SALE_PRICE]) || 0;
-  updatedRow[CONFIG.COL.TOTAL_COST_VALUE] = ((currentStock - 1) * cost).toFixed(2);
-  updatedRow[CONFIG.COL.UNIT_PROFIT] = (sale - cost).toFixed(2);
-  
-  const name = updatedRow[CONFIG.COL.PART_NAME] || updatedRow[CONFIG.COL.PART_ID];
-  showToast(`Selling 1x ${name}...`, 'info');
-  
-  // Send the update to the server with sell action
-  await sellItemInSheet(index, updatedRow, {
-    partId: row[CONFIG.COL.PART_ID] || '',
-    itemName: name,
-    cost: cost,
-    sale: sale
-  });
-}
-
-// ── Sales History ──
-async function loadSalesHistory() {
-  const tbody = document.getElementById('history-tbody');
-  tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">⏳</div><p>Loading history...</p></div></td></tr>`;
-  
-  try {
-    const url = `${CONFIG.WEB_APP_URL}?action=getHistory`;
-    const response = await fetch(url, { method: 'GET', redirect: 'follow' });
-    if (!response.ok) throw new Error('Fetch failed');
-    
-    const json = await response.json();
-    let historyRows = [];
-    if (json.data && Array.isArray(json.data)) historyRows = json.data;
-    else if (Array.isArray(json)) historyRows = json;
-    
-    // Skip headers if present
-    if (historyRows.length > 0 && String(historyRows[0][0]).toLowerCase().includes('time')) {
-      historyRows = historyRows.slice(1);
-    }
-    
-    // Sort reverse chronological
-    historyRows.reverse();
-    renderSalesHistory(historyRows);
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">⚠️</div><p>Failed to load: ${e.message}</p></div></td></tr>`;
-  }
-}
-
-function renderSalesHistory(rows) {
-  const tbody = document.getElementById('history-tbody');
-  if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">📜</div><p>No sales history yet.</p></div></td></tr>`;
-    return;
-  }
-  
-  tbody.innerHTML = rows.map(row => {
-    // Expected: [Timestamp, Part ID, Item Name, Quantity Sold, Cost Price, Sale Price, Total Profit]
-    const timestamp = row[0] || '';
-    const partId = row[1] || '';
-    const itemName = row[2] || '';
-    const qty = row[3] || '1';
-    const profit = parseFloat(row[6]) || 0;
-    const profitClass = profit >= 0 ? 'cell-profit-positive' : 'cell-profit-negative';
-    
-    return `
-      <tr>
-        <td style="font-size: 0.72rem; color: var(--text-muted);">${escapeHtml(timestamp)}</td>
-        <td class="cell-id">${escapeHtml(partId)}</td>
-        <td>${escapeHtml(itemName)}</td>
-        <td>${escapeHtml(qty)}</td>
-        <td class="${profitClass}">${formatCurrency(profit)}</td>
-      </tr>
-    `;
-  }).join('');
-}
-
-function openHistoryModal() {
-  document.getElementById('history-modal-overlay').classList.add('active');
-  loadSalesHistory();
-}
-
-function closeHistoryModal() {
-  document.getElementById('history-modal-overlay').classList.remove('active');
-}
-
 // ── Search ──
 function handleSearch(e) {
   renderInventoryTable();
@@ -688,9 +570,9 @@ function scrollToItem(index) {
 
 // ── Utils ──
 function formatCurrency(amount) {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-NP', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'NPR',
     minimumFractionDigits: 2,
   }).format(amount);
 }
@@ -729,7 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('search-input').addEventListener('input', handleSearch);
 
   // Live preview for computed fields
-  ['form-stock', 'form-cost', 'form-sale'].forEach(id => {
+  ['form-stock', 'form-cost'].forEach(id => {
     document.getElementById(id).addEventListener('input', updateComputedPreview);
   });
 
@@ -737,13 +619,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('modal-overlay').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeModal();
   });
-  document.getElementById('history-modal-overlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeHistoryModal();
-  });
-
-  // History Actions
-  document.getElementById('btn-history').addEventListener('click', openHistoryModal);
-  document.getElementById('btn-close-history').addEventListener('click', closeHistoryModal);
 
   // Close scanner on overlay click outside scanner
   document.getElementById('scanner-overlay').addEventListener('click', (e) => {

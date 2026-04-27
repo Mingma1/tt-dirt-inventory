@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>TT Dirt Inventory — Dashboard</title>
+  <link rel="icon" href="logo.png">
 
   <!-- Styles -->
   <link rel="stylesheet" href="style.css">
@@ -40,19 +41,30 @@
     <!-- ═══ Demo Mode Banner ═══ -->
 
 
-    <!-- ═══ Finance Summary ═══ -->
-    <section class="finance-summary requires-auth" id="finance-summary">
-      <div class="finance-card investment">
-        <div class="finance-label">Total Investment</div>
-        <div class="finance-value" id="total-investment">$0.00</div>
-        <div class="finance-sub" id="total-items">0 items tracked</div>
-      </div>
-      <div class="finance-card profit">
-        <div class="finance-label">Potential Total Profit</div>
-        <div class="finance-value" id="total-profit">$0.00</div>
-        <div class="finance-sub" id="potential-revenue">Est. revenue: $0.00</div>
-      </div>
-    </section>
+    <!-- ═══ Dashboard Top ═══ -->
+    <div class="dashboard-top-grid requires-auth" id="dashboard-top-grid">
+      <!-- ═══ Finance Summary ═══ -->
+      <section class="finance-summary" id="finance-summary">
+        <div class="finance-card investment" style="height: 100%;">
+          <div class="finance-label">Total Investment</div>
+          <div class="finance-value" id="total-investment">NPR 0.00</div>
+          <div class="finance-sub" id="total-items">0 items tracked</div>
+        </div>
+      </section>
+
+      <!-- ═══ Low Stock Widget ═══ -->
+      <section class="low-stock-widget" id="low-stock-widget" style="margin-bottom: 0;">
+        <div class="low-stock-header">
+          <div class="low-stock-title">
+            <span class="icon">⚠️</span> Low Stock Alert
+          </div>
+          <span class="low-stock-count" id="low-stock-count">0</span>
+        </div>
+        <div class="low-stock-list" id="low-stock-list">
+          <div class="low-stock-empty">Sign in to view alerts</div>
+        </div>
+      </section>
+    </div>
 
     <!-- ═══ Action Bar ═══ -->
     <div class="action-bar requires-auth" id="action-bar">
@@ -61,9 +73,6 @@
       </button>
       <button class="btn btn-add" id="btn-add">
         <span class="btn-icon">➕</span> Add Item
-      </button>
-      <button class="btn btn-history" id="btn-history">
-        <span class="btn-icon">📜</span> History
       </button>
       <button class="btn btn-refresh" id="btn-refresh" title="Refresh data">
         🔄
@@ -75,19 +84,6 @@
       <span class="search-icon">🔍</span>
       <input type="text" id="search-input" placeholder="Search by Part ID, name, or any field...">
     </div>
-
-    <!-- ═══ Low Stock Widget ═══ -->
-    <section class="low-stock-widget requires-auth" id="low-stock-widget">
-      <div class="low-stock-header">
-        <div class="low-stock-title">
-          <span class="icon">⚠️</span> Low Stock Alert
-        </div>
-        <span class="low-stock-count" id="low-stock-count">0</span>
-      </div>
-      <div class="low-stock-list" id="low-stock-list">
-        <div class="low-stock-empty">Sign in to view alerts</div>
-      </div>
-    </section>
 
     <!-- ═══ Inventory Table ═══ -->
     <section class="inventory-section requires-auth" id="inventory-section">
@@ -103,14 +99,12 @@
               <th>Part Name</th>
               <th>Stock</th>
               <th>Cost Price</th>
-              <th>Sale Price</th>
               <th>Total Cost Value 🔒</th>
-              <th>Unit Profit 🔒</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="inventory-tbody">
-            <tr><td colspan="8">
+            <tr><td colspan="6">
               <div class="empty-state">
                 <div class="icon">🔐</div>
                 <p>Sign in with Google to load your inventory data</p>
@@ -144,8 +138,8 @@
       </div>
       <form id="item-form">
         <div class="form-group">
-          <label class="form-label" for="form-part-id">Part ID (Barcode)</label>
-          <input class="form-input" type="text" id="form-part-id" placeholder="e.g. BRK-001" required>
+          <label class="form-label" for="form-part-id">Part ID (Leave blank to auto-generate)</label>
+          <input class="form-input" type="text" id="form-part-id" placeholder="e.g. BRK-001 or scan barcode">
         </div>
         <div class="form-group">
           <label class="form-label" for="form-part-name">Part Name</label>
@@ -157,24 +151,16 @@
             <input class="form-input" type="number" id="form-stock" min="0" step="1" placeholder="0" required>
           </div>
           <div class="form-group">
-            <label class="form-label" for="form-cost">Cost Price ($)</label>
+            <label class="form-label" for="form-cost">Cost Price (NPR)</label>
             <input class="form-input" type="number" id="form-cost" min="0" step="0.01" placeholder="0.00" required>
           </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="form-sale">Sale Price ($)</label>
-          <input class="form-input" type="number" id="form-sale" min="0" step="0.01" placeholder="0.00" required>
         </div>
 
         <!-- Computed Preview (Read-Only) -->
         <div class="form-computed">
           <div>
             <div class="form-computed-label">Total Cost Value 🔒</div>
-            <div class="form-computed-value" id="preview-total-cost">$0.00</div>
-          </div>
-          <div>
-            <div class="form-computed-label">Unit Profit 🔒</div>
-            <div class="form-computed-value profit" id="preview-unit-profit">$0.00</div>
+            <div class="form-computed-value" id="preview-total-cost">NPR 0.00</div>
           </div>
         </div>
 
@@ -183,36 +169,7 @@
     </div>
   </div>
 
-  <!-- ═══ History Modal ═══ -->
-  <div class="modal-overlay" id="history-modal-overlay">
-    <div class="modal history-modal">
-      <div class="modal-title">
-        <span id="history-modal-title-text">📜 Sales History</span>
-        <button class="btn-close-modal" id="btn-close-history">✕</button>
-      </div>
-      <div class="table-wrapper history-table-wrapper">
-        <table class="inventory-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Part ID</th>
-              <th>Item Name</th>
-              <th>Qty</th>
-              <th>Profit</th>
-            </tr>
-          </thead>
-          <tbody id="history-tbody">
-            <tr><td colspan="5">
-              <div class="empty-state">
-                <div class="icon">⏳</div>
-                <p>Loading history...</p>
-              </div>
-            </td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+  
 
   <!-- App Logic -->
   <script src="app.js"></script>
