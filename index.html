@@ -50,6 +50,11 @@
           <div class="finance-value" id="total-investment">NPR 0.00</div>
           <div class="finance-sub" id="total-items">0 items tracked</div>
         </div>
+        <div class="finance-card profit" style="height: 100%;">
+          <div class="finance-label">Potential Total Profit</div>
+          <div class="finance-value" id="total-profit">NPR 0.00</div>
+          <div class="finance-sub" id="potential-revenue">Est. revenue: NPR 0.00</div>
+        </div>
       </section>
 
       <!-- ═══ Low Stock Widget ═══ -->
@@ -99,12 +104,14 @@
               <th>Part Name</th>
               <th>Stock</th>
               <th>Cost Price</th>
+              <th>Sale Price</th>
               <th>Total Cost Value 🔒</th>
+              <th>Unit Profit 🔒</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="inventory-tbody">
-            <tr><td colspan="6">
+            <tr><td colspan="8">
               <div class="empty-state">
                 <div class="icon">🔐</div>
                 <p>Sign in with Google to load your inventory data</p>
@@ -155,12 +162,20 @@
             <input class="form-input" type="number" id="form-cost" min="0" step="0.01" placeholder="0.00" required>
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label" for="form-sale">Sale Price (NPR)</label>
+          <input class="form-input" type="number" id="form-sale" min="0" step="0.01" placeholder="0.00" required>
+        </div>
 
         <!-- Computed Preview (Read-Only) -->
         <div class="form-computed">
           <div>
             <div class="form-computed-label">Total Cost Value 🔒</div>
             <div class="form-computed-value" id="preview-total-cost">NPR 0.00</div>
+          </div>
+          <div>
+            <div class="form-computed-label">Unit Profit 🔒</div>
+            <div class="form-computed-value profit" id="preview-unit-profit">NPR 0.00</div>
           </div>
         </div>
 

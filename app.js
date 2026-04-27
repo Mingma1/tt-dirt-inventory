@@ -34,17 +34,23 @@ function recalculateAll() {
   state.inventoryData.forEach(row => {
     const stock = parseFloat(row[CONFIG.COL.STOCK_LEVEL]) || 0;
     const cost = parseFloat(row[CONFIG.COL.COST_PRICE]) || 0;
+    const sale = parseFloat(row[CONFIG.COL.SALE_PRICE]) || 0;
     row[CONFIG.COL.TOTAL_COST_VALUE] = (stock * cost).toFixed(2);
+    row[CONFIG.COL.UNIT_PROFIT] = (sale - cost).toFixed(2);
   });
 }
 
 function getFinanceSummary() {
   let totalInvestment = 0;
+  let totalPotentialProfit = 0;
   state.inventoryData.forEach(row => {
+    const stock = parseFloat(row[CONFIG.COL.STOCK_LEVEL]) || 0;
     const totalCost = parseFloat(row[CONFIG.COL.TOTAL_COST_VALUE]) || 0;
+    const unitProfit = parseFloat(row[CONFIG.COL.UNIT_PROFIT]) || 0;
     totalInvestment += totalCost;
+    totalPotentialProfit += stock * unitProfit;
   });
-  return { totalInvestment };
+  return { totalInvestment, totalPotentialProfit };
 }
 
 function getLowStockItems() {
@@ -274,9 +280,17 @@ function renderAll() {
 }
 
 function renderFinanceSummary() {
-  const { totalInvestment } = getFinanceSummary();
+  const { totalInvestment, totalPotentialProfit } = getFinanceSummary();
   document.getElementById('total-investment').textContent = formatCurrency(totalInvestment);
+  document.getElementById('total-profit').textContent = formatCurrency(totalPotentialProfit);
   document.getElementById('total-items').textContent = `${state.inventoryData.length} items tracked`;
+  
+  const totalRevenue = state.inventoryData.reduce((sum, row) => {
+    const stock = parseFloat(row[CONFIG.COL.STOCK_LEVEL]) || 0;
+    const sale = parseFloat(row[CONFIG.COL.SALE_PRICE]) || 0;
+    return sum + (stock * sale);
+  }, 0);
+  document.getElementById('potential-revenue').textContent = `Est. revenue: ${formatCurrency(totalRevenue)}`;
 }
 
 function renderLowStock() {
@@ -324,7 +338,7 @@ function renderInventoryTable() {
 
   if (data.length === 0) {
     tbody.innerHTML = `
-      <tr><td colspan="6">
+      <tr><td colspan="8">
         <div class="empty-state">
           <div class="icon">📦</div>
           <p>${query ? 'No items match your search' : 'No inventory data yet. Add your first item!'}</p>
@@ -336,6 +350,8 @@ function renderInventoryTable() {
 
   tbody.innerHTML = data.map(({ row, originalIndex }) => {
     const stock = parseInt(row[CONFIG.COL.STOCK_LEVEL]) || 0;
+    const unitProfit = parseFloat(row[CONFIG.COL.UNIT_PROFIT]) || 0;
+    const profitClass = unitProfit >= 0 ? 'cell-profit-positive' : 'cell-profit-negative';
 
     let stockBadge = '';
     if (stock === 0) stockBadge = '<span class="stock-badge critical">OUT</span>';
@@ -354,7 +370,9 @@ function renderInventoryTable() {
           </div>
         </td>
         <td>${formatCurrency(parseFloat(row[CONFIG.COL.COST_PRICE]) || 0)}</td>
+        <td>${formatCurrency(parseFloat(row[CONFIG.COL.SALE_PRICE]) || 0)}</td>
         <td class="cell-readonly">${formatCurrency(parseFloat(row[CONFIG.COL.TOTAL_COST_VALUE]) || 0)}</td>
+        <td class="cell-readonly ${profitClass}">${formatCurrency(unitProfit)}</td>
         <td>
           <div class="cell-actions">
             <button class="btn-icon-sm" onclick="openEditModal(${originalIndex})" title="Edit">✏️</button>
@@ -372,7 +390,7 @@ function setLoading(loading) {
   if (loading) {
     tbody.innerHTML = Array(5).fill('').map(() => `
       <tr class="skeleton-row">
-        ${Array(6).fill('').map(() => '<td><div class="skeleton skeleton-cell">&nbsp;</div></td>').join('')}
+        ${Array(8).fill('').map(() => '<td><div class="skeleton skeleton-cell">&nbsp;</div></td>').join('')}
       </tr>
     `).join('');
   }
@@ -455,6 +473,7 @@ function openAddModal(prefillId = '') {
   document.getElementById('form-part-name').value = '';
   document.getElementById('form-stock').value = '';
   document.getElementById('form-cost').value = '';
+  document.getElementById('form-sale').value = '';
   updateComputedPreview();
   document.getElementById('modal-overlay').classList.add('active');
   if (!prefillId) document.getElementById('form-part-id').focus();
@@ -470,6 +489,7 @@ function openEditModal(index) {
   document.getElementById('form-part-name').value = row[CONFIG.COL.PART_NAME] || '';
   document.getElementById('form-stock').value = row[CONFIG.COL.STOCK_LEVEL] || '';
   document.getElementById('form-cost').value = row[CONFIG.COL.COST_PRICE] || '';
+  document.getElementById('form-sale').value = row[CONFIG.COL.SALE_PRICE] || '';
   updateComputedPreview();
   document.getElementById('modal-overlay').classList.add('active');
 }
@@ -482,8 +502,13 @@ function closeModal() {
 function updateComputedPreview() {
   const stock = parseFloat(document.getElementById('form-stock').value) || 0;
   const cost = parseFloat(document.getElementById('form-cost').value) || 0;
+  const sale = parseFloat(document.getElementById('form-sale').value) || 0;
   const totalCost = stock * cost;
+  const unitProfit = sale - cost;
   document.getElementById('preview-total-cost').textContent = formatCurrency(totalCost);
+  document.getElementById('preview-unit-profit').textContent = formatCurrency(unitProfit);
+  document.getElementById('preview-unit-profit').className =
+    'form-computed-value ' + (unitProfit >= 0 ? 'profit' : '');
 }
 
 async function handleFormSubmit(e) {
@@ -492,9 +517,10 @@ async function handleFormSubmit(e) {
   const partName = document.getElementById('form-part-name').value.trim();
   const stock = document.getElementById('form-stock').value.trim();
   const cost = document.getElementById('form-cost').value.trim();
+  const sale = document.getElementById('form-sale').value.trim();
 
-  if (!partName || !stock || !cost) {
-    showToast('Please fill in Name, Stock, and Cost fields', 'error');
+  if (!partName || !stock || !cost || !sale) {
+    showToast('Please fill in Name, Stock, Cost, and Sale fields', 'error');
     return;
   }
 
@@ -505,15 +531,16 @@ async function handleFormSubmit(e) {
 
   const stockNum = parseFloat(stock);
   const costNum = parseFloat(cost);
+  const saleNum = parseFloat(sale);
 
   const rowData = [
     partId,
     partName,
     stockNum.toString(),
     costNum.toFixed(2),
-    "",
+    saleNum.toFixed(2),
     (stockNum * costNum).toFixed(2),
-    "",
+    (saleNum - costNum).toFixed(2),
   ];
 
   const submitBtn = document.getElementById('btn-form-submit');
@@ -611,7 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('search-input').addEventListener('input', handleSearch);
 
   // Live preview for computed fields
-  ['form-stock', 'form-cost'].forEach(id => {
+  ['form-stock', 'form-cost', 'form-sale'].forEach(id => {
     document.getElementById(id).addEventListener('input', updateComputedPreview);
   });
 
